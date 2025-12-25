@@ -20,3 +20,8 @@ The goal is to develop a machine learning model that can accurately predict user
 As we can see the dataset is already balanced as no evidence of biased selection is made from users due to boredom of selecting the first answer as presented in some papers.
 
 ![Preference](/assets/winners.png)
+
+And the dataset mainly utilized OpenAI GPT variants for generation as well as Claude 2.1!
+Further more regarding the win rate again models from OpenAI GPT topped the leaderboard probably due to techinques used like RLHF or DPO.
+![Models Usage](/assets/models_usage.png)
+![Win Rate](/assets/models_win_rate.png)
