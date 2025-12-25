@@ -14,3 +14,9 @@ This project is my experimentation & solution for the Kaggle Competition: [LLM C
 The competiotion challenges participants to predict which responses users will prefer in head-to-head battles between chatbots powered by large language models (LLMs). The dataset consists of real-world conversations from the Chatbot Arena, where users interact with two anonymous LLMs and select their preferred answer.
 
 The goal is to develop a machine learning model that can accurately predict user preferences between competing chatbot responses. This task is closely related to building "reward models" or "preference models" in the context of reinforcement learning from human feedback (RLHF). The competition highlights the importance of overcoming common biases such as position bias, verbosity bias, and self-enhancement bias, which can affect preference predictions.
+
+## 🔎 Exploration
+
+As we can see the dataset is already balanced as no evidence of biased selection is made from users due to boredom of selecting the first answer as presented in some papers.
+
+![Preference](/assets/winners.png)
