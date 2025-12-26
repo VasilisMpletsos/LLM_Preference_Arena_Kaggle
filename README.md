@@ -25,3 +25,10 @@ And the dataset mainly utilized OpenAI GPT variants for generation as well as Cl
 Further more regarding the win rate again models from OpenAI GPT topped the leaderboard probably due to techinques used like RLHF or DPO.
 ![Models Usage](/assets/models_usage.png)
 ![Win Rate](/assets/models_win_rate.png)
+
+In perspective of text there is no obvious significant leaning towards more on lengthier or smaller outputs.
+Nor more or less punctuation play an important role, neither new lines.
+
+![Winner Length Diff](/assets/winner_length_diff_count.png)
+![Winner Length Diff per Prompt Length](/assets/winner_length_prompt_and_diff_length.png)
+![Winner More Punctuation](/assets/more_punctuation_winner.png)
