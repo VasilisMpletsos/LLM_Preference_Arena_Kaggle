@@ -1,13 +1,10 @@
-CLASSIFICATION_PROMPT = """
-You are a helpfful expert that can distinguish the User's preferred response among 2 options.
-The available options are Winner A B or Tie.
+CLASSIFICATION_PROMPT = """{prompt}
 
-The Prompt is:
-{prompt}
+{seperator}
 
-Response A:
 {response_a}
 
-Response B:
+{seperator}
+
 {response_b}
 """

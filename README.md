@@ -32,3 +32,11 @@ Nor more or less punctuation play an important role, neither new lines.
 ![Winner Length Diff](/assets/winner_length_diff_count.png)
 ![Winner Length Diff per Prompt Length](/assets/winner_length_prompt_and_diff_length.png)
 ![Winner More Punctuation](/assets/more_punctuation_winner.png)
+
+## Training
+
+Initial training experiments on a subset of 1,000 examples demonstrate consistent learning progress:
+
+Epoch 1/10, Training Accuracy: 36.00%
+Epoch 2/10, Training Accuracy: 41.11%
+Epoch 3/10, Training Accuracy: 46.44%
