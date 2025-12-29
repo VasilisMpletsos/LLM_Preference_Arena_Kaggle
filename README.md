@@ -11,7 +11,7 @@
 
 This project is my experimentation & solution for the Kaggle Competition: [LLM Classification Finetuning](https://www.kaggle.com/competitions/llm-classification-finetuning/overview)
 
-The competiotion challenges participants to predict which responses users will prefer in head-to-head battles between chatbots powered by large language models (LLMs). The dataset consists of real-world conversations from the Chatbot Arena, where users interact with two anonymous LLMs and select their preferred answer.
+The competition challenges participants to predict which responses users will prefer in head-to-head battles between chatbots powered by large language models (LLMs). The dataset consists of real-world conversations from the Chatbot Arena, where users interact with two anonymous LLMs and select their preferred answer.
 
 The goal is to develop a machine learning model that can accurately predict user preferences between competing chatbot responses. This task is closely related to building "reward models" or "preference models" in the context of reinforcement learning from human feedback (RLHF). The competition highlights the importance of overcoming common biases such as position bias, verbosity bias, and self-enhancement bias, which can affect preference predictions.
 
@@ -37,6 +37,14 @@ Nor more or less punctuation play an important role, neither new lines.
 
 Initial training experiments on a subset of 1,000 examples demonstrate consistent learning progress:
 
+```
 Epoch 1/10, Training Accuracy: 36.00%
 Epoch 2/10, Training Accuracy: 41.11%
 Epoch 3/10, Training Accuracy: 46.44%
+```
+
+- But the validation did not show any meaningfull improvement on the 3090 GPU trained for 3 hours achieving ~39% accuracy validation (better than random but close)
+
+While tokenizing with modern bert tokenizer we use truncation and the max length is **8192** which leads to some examples being cut off but are very few
+**less thaN 0.15%**
+![Distribution of Tokens Length from Modern Bert](/assets/tokens_length_distibution.png)

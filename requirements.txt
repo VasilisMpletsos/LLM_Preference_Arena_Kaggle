@@ -10,8 +10,10 @@ peft
 trl
 matplotlib
 seaborn
+tensorboard
 # IMPORTANT!!!! : Make sure to install your CORRECT CUDA version of PyTorch
 # --extra-index-url https://download.pytorch.org/whl/cu126
 torch
 torchvision
 ipywidgets
+ipykernel
