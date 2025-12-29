@@ -16,6 +16,7 @@ from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 sys.path.append(str(Path.cwd().parent))
 from utils import remove_extra_brackets, CLASSIFICATION_PROMPT
+from transformers import DataCollatorWithPadding
 
 if __name__ == "__main__":
 
@@ -56,35 +57,28 @@ if __name__ == "__main__":
         cleaned_prompt = remove_extra_brackets(row['prompt'])
         cleaned_response_a = remove_extra_brackets(row['response_a'])
         cleaned_response_b = remove_extra_brackets(row['response_b'])
-        prompt = CLASSIFICATION_PROMPT.format(
-            prompt=cleaned_prompt,
-            response_a=cleaned_response_a,
-            response_b=cleaned_response_b,
-            seperator=tokenizer.sep_token
-        )
+        
+        sep_id = tokenizer.sep_token_id
+        cls_id = tokenizer.cls_token_id
+        
+        p_ids = tokenizer(cleaned_prompt, add_special_tokens=False)['input_ids']
+        a_ids = tokenizer(cleaned_response_a, add_special_tokens=False)['input_ids']
+        b_ids = tokenizer(cleaned_response_b, add_special_tokens=False)['input_ids']
+        
+        # Structure: [CLS] + Prompt + [SEP] + A + [SEP] + B + [SEP]
+        input_ids = [cls_id] + p_ids + [sep_id] + a_ids + [sep_id] + b_ids + [sep_id]
+    
+        
         winner = [row['winner_model_a'], row['winner_model_b'], row['winner_tie']]
+        
         return {
-            "final_prompt": prompt,
-            "winner": winner
+            "input_ids": input_ids,
+            "winner": winner,
+            "length": len(input_ids) # easy filtering later
         }
-        
-    def tokenize_dataset(batch):
-        tokenized = tokenizer(
-            batch["final_prompt"],
-            padding="max_length",
-            max_length=tokenizer.model_max_length,
-            truncation=False,
-            return_tensors=None
-        )
-        
-        length = [len(row) for row in tokenized["input_ids"]]
-        return {**tokenized, "length": length}
 
     # %%
     df = df.map(fix_dataset, batched=False).remove_columns(['id', 'model_a', 'model_b', 'prompt', 'response_a', 'response_b','winner_model_a', 'winner_model_b', 'winner_tie'])
-
-    # %%
-    df = df.map(tokenize_dataset, batched=True, num_proc=16).remove_columns(['final_prompt'])
 
     # %%
     df = df.filter(lambda batch: np.array(batch["length"]) <= 8192, batched=True).remove_columns(["length"])
@@ -94,8 +88,10 @@ if __name__ == "__main__":
     df['train'] = train_val_split['train']
     df['validation'] = train_val_split['test']
     df = df.with_format("torch")
-    train_dataloader = DataLoader(df["train"], batch_size=4, shuffle=True)
-    val_dataloader = DataLoader(df["validation"], batch_size=4, shuffle=False)
+    # Initialize the collator
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True)
+    train_dataloader = DataLoader(df["train"], batch_size=4, shuffle=True, collate_fn=data_collator)
+    val_dataloader = DataLoader(df["validation"], batch_size=4, shuffle=False, collate_fn=data_collator)
 
     # %%
     # next(iter(train_dataloader))
@@ -130,7 +126,7 @@ if __name__ == "__main__":
             data = {key: value.to("cuda") for key, value in data.items()}
             
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                outputs = model_classification(data["input_ids"], attention_mask=data["attention_mask"]).logits
+                outputs = model_classification(data["input_ids"]).logits
                 with torch.no_grad():
                     _, predicted = torch.max(outputs, 1)
                     _, true_labels = torch.max(data["winner"], 1)
@@ -170,7 +166,7 @@ if __name__ == "__main__":
                 with torch.no_grad():
                     for val_data in validation_bar:
                         val_data = {key: value.to("cuda") for key, value in val_data.items()}
-                        outputs = model_classification(val_data["input_ids"], attention_mask=val_data["attention_mask"]).logits
+                        outputs = model_classification(val_data["input_ids"]).logits
                         _, predicted = torch.max(outputs, 1)
                         _, true_labels = torch.max(val_data["winner"], 1)
                         total += true_labels.size(0)
@@ -186,5 +182,3 @@ if __name__ == "__main__":
         avg_loss = total_loss / len(train_dataloader)
         print(f"Epoch {epoch+1}/{EPOCHS}, Avg Loss: {avg_loss:.4f}, LR: {scheduler.get_last_lr()[0]:.2e}")
         print(f"Epoch {epoch+1}/{EPOCHS}, Training Accuracy: {100 * (total_correct / total_count):.2f}%")
-
-
