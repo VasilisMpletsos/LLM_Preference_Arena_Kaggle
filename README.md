@@ -48,3 +48,8 @@ Epoch 3/10, Training Accuracy: 46.44%
 While tokenizing with modern bert tokenizer we use truncation and the max length is **8192** which leads to some examples being cut off but are very few
 **less thaN 0.15%**
 ![Distribution of Tokens Length from Modern Bert](/assets/tokens_length_distibution.png)
+
+The Modern Bert Trained from scratch including bfloat 16 is huge and i could only pack 4 examples per batch size thus i have gradient accumulation steps in the
+code. The reporting happens every n steps where n = gradient accumulation steps. The GPU caps at around 20 GB and during inference at ~22 so thats the current threshold.
+Other possible options is to use PEFT, reduce max_length more or split the model to gpus if you have multi gpu cluster.
+![3090 GPU Usage](/assets/3090_usage.png)
