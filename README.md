@@ -19,19 +19,19 @@ The goal is to develop a machine learning model that can accurately predict user
 
 As we can see the dataset is already balanced as no evidence of biased selection is made from users due to boredom of selecting the first answer as presented in some papers.
 
-![Preference](/assets/winners.png)
+![Preference](./assets/winners.png)
 
 And the dataset mainly utilized OpenAI GPT variants for generation as well as Claude 2.1!
 Further more regarding the win rate again models from OpenAI GPT topped the leaderboard probably due to techinques used like RLHF or DPO.
-![Models Usage](/assets/models_usage.png)
-![Win Rate](/assets/models_win_rate.png)
+![Models Usage](./assets/models_usage.png)
+![Win Rate](./assets/models_win_rate.png)
 
 In perspective of text there is no obvious significant leaning towards more on lengthier or smaller outputs.
 Nor more or less punctuation play an important role, neither new lines.
 
-![Winner Length Diff](/assets/winner_length_diff_count.png)
-![Winner Length Diff per Prompt Length](/assets/winner_length_prompt_and_diff_length.png)
-![Winner More Punctuation](/assets/more_punctuation_winner.png)
+![Winner Length Diff](./assets/winner_length_diff_count.png)
+![Winner Length Diff per Prompt Length](./assets/winner_length_prompt_and_diff_length.png)
+![Winner More Punctuation](./assets/more_punctuation_winner.png)
 
 ## Training
 
@@ -45,14 +45,19 @@ Epoch 3/10, Training Accuracy: 46.44%
 
 - The validation shows a meaningfull improvement (achieved **~47.60%** accuracy) trained on the 3090 GPU but you need to train for a lot of hours.
 
-![Train Modern Bert](/assets/train_accuracy.png)
-![Validation Modern Bert](/assets/validation_accuracy.png)
+![Train Modern Bert](./assets/train_accuracy.png)
+![Validation Modern Bert](./assets/validation_accuracy.png)
 
 While tokenizing with modern bert tokenizer we use truncation and the max length is **8192** which leads to some examples being cut off but are very few
 **less thaN 0.15%**
-![Distribution of Tokens Length from Modern Bert](/assets/tokens_length_distibution.png)
+![Distribution of Tokens Length from Modern Bert](./assets/tokens_length_distibution.png)
 
 The Modern Bert Trained from scratch including bfloat 16 is huge and i could only pack 4 examples per batch size thus i have gradient accumulation steps in the
 code. The reporting happens every n steps where n = gradient accumulation steps. The GPU caps at around 20 GB and during inference at ~22 so thats the current threshold.
 Other possible options is to use PEFT, reduce max_length more or split the model to gpus if you have multi gpu cluster.
-![3090 GPU Usage](/assets/3090_usage.png)
+![3090 GPU Usage](./assets/3090_usage.png)
+
+A better solution out of the box is the **llm_trainig.py** where i trained **Qwen3-4B-Instruct-2507 loaded in 8 bit and changed the output head to be a classification linear projector**.
+This solution requires a lot of compute power and memory so i used the **NVIDIA RTX PRO 6000 with 98GB VRAM** and achieved only 1 example per batch with 64 accumulation steps.
+This finetuning solution achieved **53.25% accuracy +6% from the ModernBert Base.**.
+![RTX PRO 6000 GPU Usage](./assets/rtx_6000_usage.png)
