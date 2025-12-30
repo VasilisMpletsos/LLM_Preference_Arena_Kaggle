@@ -43,7 +43,10 @@ Epoch 2/10, Training Accuracy: 41.11%
 Epoch 3/10, Training Accuracy: 46.44%
 ```
 
-- But the validation did not show any meaningfull improvement on the 3090 GPU trained for 3 hours achieving ~39% accuracy validation (better than random but close)
+- The validation shows a meaningfull improvement (achieved **~47.60%** accuracy) trained on the 3090 GPU but you need to train for a lot of hours.
+
+![Train Modern Bert](/assets/train_accuracy.png)
+![Validation Modern Bert](/assets/validation_accuracy.png)
 
 While tokenizing with modern bert tokenizer we use truncation and the max length is **8192** which leads to some examples being cut off but are very few
 **less thaN 0.15%**

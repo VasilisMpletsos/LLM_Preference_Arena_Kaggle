@@ -24,11 +24,11 @@ from transformers import (
 sys.path.append(str(Path.cwd().parent))
 from transformers import DataCollatorWithPadding
 
-from utils import remove_extra_brackets
+from utils import CosineLearningDecay, remove_extra_brackets
 
 if __name__ == "__main__":
     # %%
-    writer = SummaryWriter("./modern_bert")
+    writer = SummaryWriter("./logs/modern_bert")
 
     # %%
     # Load multiple CSV files
@@ -44,27 +44,6 @@ if __name__ == "__main__":
     )
     model_classification = model_classification.to("cuda", torch.bfloat16)
     model_maskedLM = AutoModelForMaskedLM.from_pretrained("FacebookAI/roberta-base")
-
-    # %%
-    # Example of final senentence fed into the model
-    row = df["train"][0]
-    cleaned_prompt = remove_extra_brackets(row["prompt"])
-    cleaned_response_a = remove_extra_brackets(row["response_a"])
-    cleaned_response_b = remove_extra_brackets(row["response_b"])
-    prompt = CLASSIFICATION_PROMPT.format(
-        prompt=cleaned_prompt,
-        response_a=cleaned_response_a,
-        response_b=cleaned_response_b,
-        seperator=tokenizer.sep_token,
-    )
-    encoded_prompt = tokenizer(
-        prompt,
-        truncation=True,
-        padding="max_length",
-        max_length=tokenizer.model_max_length,
-        return_tensors=None,
-    )
-    print(tokenizer.decode(encoded_prompt["input_ids"]))
 
     # %%
     def fix_dataset(row):
@@ -131,9 +110,18 @@ if __name__ == "__main__":
     model_classification = torch.compile(model_classification)
 
     # %%
-    optimizer = AdamW(model_classification.parameters(), lr=1e-4, weight_decay=0.01)
-    EPOCHS = 10
-    scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
+    STARTING_LEARNING_RATE = 1e-4
+    optimizer = AdamW(
+        model_classification.parameters(), lr=STARTING_LEARNING_RATE, weight_decay=0.01
+    )
+    EPOCHS = 100
+    scheduler = CosineLearningDecay(
+        max_lr=STARTING_LEARNING_RATE,
+        min_lr=1e-6,
+        optimizer=optimizer,
+        max_steps=650000,
+        warmup_steps=1000,
+    )
     loss_fn = CrossEntropyLoss()
     GRADIENT_ACCUMULATION_STEPS = 32
 
@@ -184,7 +172,6 @@ if __name__ == "__main__":
                 loss = loss_fn(outputs, true_labels)
 
             (loss / GRADIENT_ACCUMULATION_STEPS).backward()
-
             total_loss += loss.item()
 
             if (step + 1) % GRADIENT_ACCUMULATION_STEPS == 0:
@@ -195,6 +182,7 @@ if __name__ == "__main__":
                 train_bar.set_postfix({"accuracy": f"{(accuracy):.2f}%"})
                 # torch.nn.utils.clip_grad_norm_(model_classification.parameters(), max_norm=1.0)
                 optimizer.step()
+                scheduler.update_lr((epoch * train_size) + (step + 1))
                 optimizer.zero_grad()
 
                 writer.add_scalar(
@@ -223,11 +211,8 @@ if __name__ == "__main__":
                 )
                 model_classification.train()
 
-        scheduler.step()
         avg_loss = total_loss / len(train_dataloader)
-        print(
-            f"Epoch {epoch + 1}/{EPOCHS}, Avg Loss: {avg_loss:.4f}, LR: {scheduler.get_last_lr()[0]:.2e}"
-        )
+        print(f"Epoch {epoch + 1}/{EPOCHS}, Avg Loss: {avg_loss:.4f}")
         print(
             f"Epoch {epoch + 1}/{EPOCHS}, Training Accuracy: {100 * (total_correct / total_count):.2f}%"
         )
