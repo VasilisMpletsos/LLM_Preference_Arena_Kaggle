@@ -35,7 +35,7 @@ Nor more or less punctuation play an important role, neither new lines.
 
 ## Training
 
-Initial training experiments on a subset of 1,000 examples demonstrate consistent learning progress:
+Initial training experiments on a subset of 1,000 examples demonstrate consistent learning progress om Modern Bert:
 
 ```
 Epoch 1/10, Training Accuracy: 36.00%
@@ -59,5 +59,6 @@ Other possible options is to use PEFT, reduce max_length more or split the model
 
 A better solution out of the box is the **llm_trainig.py** where i trained **Qwen3-4B-Instruct-2507 loaded in 8 bit and changed the output head to be a classification linear projector**.
 This solution requires a lot of compute power and memory so i used the **NVIDIA RTX PRO 6000 with 98GB VRAM** and achieved only 1 example per batch with 64 accumulation steps.
-This finetuning solution achieved **53.25% accuracy +6% from the ModernBert Base.**.
+This finetuning solution achieved at its peak **57.10% accuracy +9.5% from the ModernBert Base.**.
 ![RTX PRO 6000 GPU Usage](./assets/rtx_6000_usage.png)
+![LLM Training](./assets/llm_report.png)
