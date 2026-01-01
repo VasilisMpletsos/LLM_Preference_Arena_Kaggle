@@ -14,19 +14,23 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+    DataCollatorWithPadding,
+)
 
 sys.path.append(str(Path.cwd().parent))
 import bitsandbytes as bnb
 import loralib as lora
-from peft import LoraConfig, get_peft_model
-from transformers import DataCollatorWithPadding
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
-from utils import CLASSIFICATION_PROMPT, remove_extra_brackets
+from utils import CLASSIFICATION_PROMPT, CosineLearningDecay, remove_extra_brackets
 
 if __name__ == "__main__":
     BATCH_SIZE = 1
-
+    GRADIENT_ACCUMULATION_STEPS = 64
     writer = SummaryWriter("./logs/qwen_llm_finetune")
 
     # Load multiple CSV files
@@ -38,30 +42,40 @@ if __name__ == "__main__":
     # Qwen/Qwen3-0.6B
 
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
+    tokenizer.pad_token = tokenizer.eos_token
     print(f"Model max length is {tokenizer.model_max_length} characters.")
     quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen3-4B-Instruct-2507", device_map="cuda"
+    model = AutoModelForSequenceClassification.from_pretrained(
+        "Qwen/Qwen3-4B-Instruct-2507",
+        device_map="cuda",
+        num_labels=3,
+        quantization_config=quantization_config,
+        attn_implementation="sdpa",
+        torch_dtype=torch.bfloat16,
     )
-    model.lm_head = Linear(model.config.hidden_size, 3, bias=False).to("cuda")
+    model = prepare_model_for_kbit_training(model)
+    model.config.pad_token_id = model.config.eos_token_id
 
     lora_config = LoraConfig(
         r=64,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "lm_head"],
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
         lora_dropout=0.05,
+        modules_to_save=["score"],
     )
 
     # add LoRA adaptor
     model = get_peft_model(model, lora_config)
     lora.mark_only_lora_as_trainable(model)
+    for param in model.score.parameters():
+        param.requires_grad = True
 
     # Enable gradient checkpointing on raw pytorch
-    model.gradient_checkpointing_enable()
-    model.enable_input_require_grads()
-    model.config.use_cache = False
+    # model.gradient_checkpointing_enable()
+    # model.enable_input_require_grads()
+    # model.config.use_cache = False
 
     model.print_trainable_parameters()
-    # ## Fix Dataset
+    ## Fix Dataset
 
     def fix_dataset(row):
         cleaned_prompt = remove_extra_brackets(row["prompt"])
@@ -124,12 +138,21 @@ if __name__ == "__main__":
     # # Training
 
     # model = torch.compile(model)
-    optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)
-    # optimizer = bnb.optim.Adam(model.parameters(), lr=1e-4, optim_bits=32)
+    STARTING_LEARNING_RATE = 1e-4
+    # optimizer = AdamW(model.parameters(), lr=STARTING_LEARNING_RATE, weight_decay=0.01)
+    optimizer = bnb.optim.PagedAdamW8bit(
+        model.parameters(), lr=STARTING_LEARNING_RATE, weight_decay=0.01
+    )
+    # optimizer = bnb.optim.Adam8bit(model.parameters(), min_8bit_size=16384)
     EPOCHS = 10
-    scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
+    scheduler = CosineLearningDecay(
+        max_lr=STARTING_LEARNING_RATE,
+        min_lr=1e-6,
+        optimizer=optimizer,
+        max_steps=250_000,
+        warmup_steps=1_000,
+    )
     loss_fn = CrossEntropyLoss()
-    GRADIENT_ACCUMULATION_STEPS = 64
 
     torch.set_float32_matmul_precision("medium")
 
@@ -137,6 +160,8 @@ if __name__ == "__main__":
     grad_steps_count = 0
 
     train_size = len(train_dataloader)
+    best_validation_accuracy = 0.0
+    best_model_weights = None
 
     for epoch in range(EPOCHS):
         model.train()
@@ -144,7 +169,6 @@ if __name__ == "__main__":
         total_correct = 0
         total_count = 0
         optimizer.zero_grad()
-
         train_bar = tqdm(
             train_dataloader, desc=f"Epoch {epoch + 1}/{EPOCHS}", leave=True, position=0
         )
@@ -155,14 +179,13 @@ if __name__ == "__main__":
             position=0,
         )
         for step, data in enumerate(train_bar):
+            scheduler.update_lr((epoch * train_size) + (step + 1))
             data = {key: value.to("cuda") for key, value in data.items()}
 
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 outputs = outputs = model(data["input_ids"]).logits
-                last_row_positions = data["attention_mask"].sum(dim=1) - 1
-                preds = outputs[torch.arange(BATCH_SIZE), last_row_positions, :]
                 with torch.no_grad():
-                    _, predicted = torch.max(preds, 1)
+                    _, predicted = torch.max(outputs, 1)
                     _, true_labels = torch.max(data["winner"], 1)
                     examples_count = data["input_ids"].size(0)
                     correct_count = (predicted == true_labels).sum().item()
@@ -177,7 +200,7 @@ if __name__ == "__main__":
                             }
                         )
 
-                loss = loss_fn(preds, true_labels)
+                loss = loss_fn(outputs, true_labels)
 
             (loss / GRADIENT_ACCUMULATION_STEPS).backward()
 
@@ -196,9 +219,9 @@ if __name__ == "__main__":
                     "Accuracy/train", accuracy, (epoch * train_size) + (step + 1)
                 )
 
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
 
-            if step % 16000 == 0 and step != 0:
+            if (step + 1) % (train_size // 3) == 0 and step != 0:
                 model.eval()
                 correct = 0
                 total = 0
@@ -209,11 +232,7 @@ if __name__ == "__main__":
                                 key: value.to("cuda") for key, value in data.items()
                             }
                             outputs = model(data["input_ids"]).logits
-                            last_row_positions = data["attention_mask"].sum(dim=1) - 1
-                            preds = outputs[
-                                torch.arange(BATCH_SIZE), last_row_positions, :
-                            ]
-                            _, predicted = torch.max(preds, 1)
+                            _, predicted = torch.max(outputs, 1)
                             _, true_labels = torch.max(data["winner"], 1)
                             total += true_labels.size(0)
                             correct += (predicted == true_labels).sum().item()
@@ -225,11 +244,16 @@ if __name__ == "__main__":
                 )
                 model.train()
 
-        scheduler.step()
+                if accuracy > best_validation_accuracy:
+                    best_validation_accuracy = accuracy
+                    best_model_weights = model.state_dict()
+                    torch.save(
+                        model.state_dict(),
+                        "./models/best_qwen_llm_finetune_model.pth",
+                    )
+
         avg_loss = total_loss / len(train_dataloader)
-        print(
-            f"Epoch {epoch + 1}/{EPOCHS}, Avg Loss: {avg_loss:.4f}, LR: {scheduler.get_last_lr()[0]:.2e}"
-        )
+        print(f"Epoch {epoch + 1}/{EPOCHS}, Avg Loss: {avg_loss:.4f}")
         print(
             f"Epoch {epoch + 1}/{EPOCHS}, Training Accuracy: {100 * (total_correct / total_count):.2f}%"
         )
