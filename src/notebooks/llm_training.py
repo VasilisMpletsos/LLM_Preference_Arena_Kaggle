@@ -160,7 +160,7 @@ if __name__ == "__main__":
     grad_steps_count = 0
 
     train_size = len(train_dataloader)
-    best_validation_accuracy = 0.0
+    best_validation_loss = float("inf")
     best_model_weights = None
 
     for epoch in range(EPOCHS):
@@ -221,10 +221,11 @@ if __name__ == "__main__":
 
             # torch.cuda.empty_cache()
 
-            if (step + 1) % (train_size // 3) == 0 and step != 0:
+            if (step + 1) % (train_size // 5) == 0 and step != 0:
                 model.eval()
                 correct = 0
                 total = 0
+                val_loss = 0
                 for data in validation_bar:
                     with torch.no_grad():
                         with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
@@ -234,19 +235,24 @@ if __name__ == "__main__":
                             outputs = model(data["input_ids"]).logits
                             _, predicted = torch.max(outputs, 1)
                             _, true_labels = torch.max(data["winner"], 1)
+                            val_loss += loss_fn(outputs, true_labels).item()
                             total += true_labels.size(0)
                             correct += (predicted == true_labels).sum().item()
 
                 accuracy = 100 * (correct / total)
                 print(f"Validation Accuracy: {accuracy:.2f}%")
+                print(f"Validation Loss: {val_loss:.2f}%")
                 writer.add_scalar(
                     "Accuracy/validation", accuracy, (epoch * train_size) + (step + 1)
                 )
                 model.train()
 
-                if accuracy > best_validation_accuracy:
-                    best_validation_accuracy = accuracy
+                if val_loss < best_validation_loss:
+                    best_validation_loss = val_loss
                     best_model_weights = model.state_dict()
+                    print(
+                        f"New best model found with val accuracy {accuracy:.2f}% & loss {val_loss:.4f}."
+                    )
                     torch.save(
                         model.state_dict(),
                         "./models/best_qwen_llm_finetune_model.pth",
