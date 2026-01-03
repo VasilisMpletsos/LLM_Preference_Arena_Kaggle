@@ -62,3 +62,9 @@ This solution requires a lot of compute power and memory so i used the **NVIDIA 
 This finetuning solution achieved at its peak **57.10% accuracy +9.5% from the ModernBert Base.**.
 ![RTX PRO 6000 GPU Usage](./assets/rtx_6000_usage.png)
 ![LLM Training](./assets/llm_report.png)
+
+## 🤗 Published Model
+
+This marks my first model publication on Hugging Face! The fine-tuned [Qwen3-4b-merged-preference-classifier](https://huggingface.co/Vmpletsos/qwen3-4b-merged-preference-classifier) preference classifier is now publicly available for the community to use and build upon. The model represents the culmination of extensive experimentation with LLM fine-tuning for preference prediction, achieving 57.10% accuracy on the validation set. Publishing to Hugging Face not only makes the model accessible for inference and further research but also contributes to the open-source ML community's efforts in understanding and improving AI alignment through preference modeling. The repository includes both the model weights and tokenizer, making it straightforward for others to integrate this preference classifier into their own projects or use it as a baseline for further improvements.
+
+![Published model](./assets/published_model.png)
